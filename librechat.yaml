@@ -1,0 +1,22 @@
+version: 1.3.13
+cache: true
+
+# Snck AI - user-configurable third-party inference
+#
+# This endpoint accepts any OpenAI-compatible API gateway.
+# Each user can enter their own API key and API base URL from the UI.
+# No provider key is stored in this repository.
+endpoints:
+  custom:
+    - name: "Snck AI • Custom API"
+      apiKey: "user_provided"
+      baseURL: "user_provided"
+      models:
+        default:
+          - "your-model"
+        fetch: true
+      titleConvo: true
+      titleModel: "your-model"
+      modelDisplayLabel: "Custom / Third-Party API"
+      addParams:
+        stream: true
