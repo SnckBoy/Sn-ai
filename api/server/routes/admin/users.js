@@ -4,7 +4,7 @@ const { SystemCapabilities } = require('@librechat/data-schemas');
 const { requireCapability } = require('~/server/middleware/roles/capabilities');
 const { requireJwtAuth } = require('~/server/middleware');
 const db = require('~/models');
-const adminSnck = require('./snck');
+const createAdminSnckRouter = require('./snck');
 
 const router = express.Router();
 
@@ -24,7 +24,7 @@ router.use(requireJwtAuth, requireAdminAccess);
 
 router.get('/', requireReadUsers, handlers.listUsers);
 router.get('/search', requireReadUsers, handlers.searchUsers);
-router.use('/snck', adminSnck);
+router.use('/snck', createAdminSnckRouter());
 // router.delete('/:id', requireManageUsers, handlers.deleteUser);
 
 module.exports = router;
