@@ -1,6 +1,28 @@
 services:
   api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: node
+    image: snck-ai:local
+    environment:
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+    depends_on:
+      - mongodb
+      - rag_api
+      - ollama
     volumes:
       - type: bind
         source: ./librechat.yaml
         target: /app/librechat.yaml
+  ollama:
+    container_name: snck-ollama
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    expose:
+      - "11434"
+
+volumes:
+  ollama-data:
