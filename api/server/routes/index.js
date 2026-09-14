@@ -28,6 +28,7 @@ const models = require('./models');
 const convos = require('./convos');
 const config = require('./config');
 const agents = require('./agents');
+const snckApi = require('./snckApi');
 const roles = require('./roles');
 const oauth = require('./oauth');
 const files = require('./files');
@@ -63,6 +64,7 @@ module.exports = {
   share,
   banner,
   agents,
+  snckApi,
   convos,
   search,
   config,
