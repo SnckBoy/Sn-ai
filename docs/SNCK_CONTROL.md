@@ -44,7 +44,7 @@ The API key is never placed in the frontend bundle or repository.
 
 ## Local models
 
-Snck now includes an internal Ollama service in the Docker deployment. It is not exposed directly on the public host port.
+Snck now includes an internal local model service in the Docker deployment. It is not exposed directly on a public host port.
 
 The Snck Local endpoint uses:
 
@@ -52,16 +52,16 @@ The Snck Local endpoint uses:
 http://ollama:11434/v1/
 ```
 
-Admins can manage local models through the authenticated backend routes:
+Admins can manage local models through authenticated backend routes under the existing admin users route:
 
 ```text
-GET    /api/admin/snck/health
-GET    /api/admin/snck/models
-POST   /api/admin/snck/models/pull
-DELETE /api/admin/snck/models/:model
+GET    /api/admin/users/snck/health
+GET    /api/admin/users/snck/models
+POST   /api/admin/users/snck/models/pull
+DELETE /api/admin/users/snck/models/:model
 ```
 
-Model names are validated and the integration communicates with Ollama over its HTTP API. It does not expose a generic shell-command endpoint.
+Model names are validated and the integration communicates with the local model service over HTTP. It does not expose a generic shell-command endpoint.
 
 ## Environment
 
@@ -71,7 +71,7 @@ The Docker API container uses:
 OLLAMA_BASE_URL=http://ollama:11434
 ```
 
-For an external/private Ollama service, set `OLLAMA_BASE_URL` to the service address in the deployment environment instead of exposing Ollama publicly.
+For an external/private Ollama service, set `OLLAMA_BASE_URL` to the service address in the deployment environment instead of exposing the service publicly.
 
 See `config/snck.env.example` for the Snck-specific deployment variables.
 
@@ -79,7 +79,7 @@ See `config/snck.env.example` for the Snck-specific deployment variables.
 
 - Admin local-model routes require the existing JWT authentication and `ACCESS_ADMIN` capability.
 - Remote API routes use the existing Remote Agents API-key authentication and permissions.
-- User-provided third-party API keys use the existing LibreChat encrypted credential storage.
-- Model names are validated before requests are sent to Ollama.
+- User-provided third-party API keys use the existing encrypted credential storage.
+- Model names are validated before requests are sent to the local model service.
 - No web endpoint executes arbitrary shell commands.
 - Do not commit `.env`, API keys, JWT secrets, database credentials, or provider credentials.
