@@ -7,7 +7,7 @@ import {
   isMediaSupportedProvider,
 } from './schemas';
 import { retrievalMimeTypes, isBedrockDocumentType, codeInterpreterMimeTypes } from './file-config';
-import { EToolResources } from './types/assistants';
+import { EToolResources } from './types/tools';
 
 /** Audio and video reach the model only through the media encoders, which support a
  *  narrower provider set than documents. Images use the broadly supported vision
