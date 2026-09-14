@@ -3,9 +3,6 @@ const { SystemCapabilities } = require('@librechat/data-schemas');
 const { requireCapability } = require('~/server/middleware/roles/capabilities');
 const { requireJwtAuth } = require('~/server/middleware');
 
-const router = express.Router();
-const requireAdminAccess = requireCapability(SystemCapabilities.ACCESS_ADMIN);
-
 const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || 'http://ollama:11434').replace(/\/$/, '');
 const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
 
@@ -49,69 +46,78 @@ function validateModel(model, res) {
   return true;
 }
 
-router.use(requireJwtAuth, requireAdminAccess);
+function createSnckAdminRouter() {
+  const router = express.Router();
+  const requireAdminAccess = requireCapability(SystemCapabilities.ACCESS_ADMIN);
 
-router.get('/health', async (_req, res) => {
-  try {
-    const data = await ollama('/api/tags', { timeout: 5_000 });
-    res.json({ ok: true, ollama: true, modelCount: data.models?.length ?? 0 });
-  } catch (error) {
-    res.status(502).json({ ok: false, ollama: false, error: error.message });
+  // Authentication and authorization are kept inside the factory so this module
+  // has no route-level side effects during application startup.
+  router.use(requireJwtAuth, requireAdminAccess);
+
+  router.get('/health', async (_req, res) => {
+    try {
+      const data = await ollama('/api/tags', { timeout: 5_000 });
+      res.json({ ok: true, ollama: true, modelCount: data.models?.length ?? 0 });
+    } catch (error) {
+      res.status(502).json({ ok: false, ollama: false, error: error.message });
+    }
+  });
+
+  router.get('/models', async (_req, res) => {
+    try {
+      const data = await ollama('/api/tags', { timeout: 15_000 });
+      res.json({ models: data.models || [] });
+    } catch (error) {
+      res.status(502).json({ error: `Unable to reach local model service: ${error.message}` });
+    }
+  });
+
+  router.post('/models/pull', async (req, res) => {
+    const model = readModel(req.body?.model);
+    if (!validateModel(model, res)) return;
+
+    try {
+      const data = await ollama('/api/pull', {
+        method: 'POST',
+        body: JSON.stringify({ model, stream: false }),
+        timeout: 60 * 60 * 1000,
+      });
+      return res.json({ installed: true, model, status: data.status || 'success' });
+    } catch (error) {
+      return res.status(error.status && error.status >= 400 ? error.status : 502).json({
+        installed: false,
+        model,
+        error: error.name === 'AbortError' ? 'Model download timed out' : error.message,
+      });
+    }
+  });
+
+  async function deleteModel(model, res) {
+    if (!validateModel(model, res)) return;
+
+    try {
+      await ollama('/api/delete', {
+        method: 'DELETE',
+        body: JSON.stringify({ model }),
+        timeout: 30_000,
+      });
+      return res.json({ deleted: true, model });
+    } catch (error) {
+      return res.status(error.status && error.status >= 400 ? error.status : 502).json({
+        deleted: false,
+        model,
+        error: error.message,
+      });
+    }
   }
-});
 
-router.get('/models', async (_req, res) => {
-  try {
-    const data = await ollama('/api/tags', { timeout: 15_000 });
-    res.json({ models: data.models || [] });
-  } catch (error) {
-    res.status(502).json({ error: `Unable to reach local model service: ${error.message}` });
-  }
-});
+  // Body-based deletion supports model names containing '/'.
+  router.delete('/models', async (req, res) => deleteModel(readModel(req.body?.model), res));
 
-router.post('/models/pull', async (req, res) => {
-  const model = readModel(req.body?.model);
-  if (!validateModel(model, res)) return;
+  // Keep the simple path form for backwards compatibility with model names that contain no '/'.
+  router.delete('/models/:model', async (req, res) => deleteModel(readModel(req.params.model), res));
 
-  try {
-    const data = await ollama('/api/pull', {
-      method: 'POST',
-      body: JSON.stringify({ model, stream: false }),
-      timeout: 60 * 60 * 1000,
-    });
-    return res.json({ installed: true, model, status: data.status || 'success' });
-  } catch (error) {
-    return res.status(error.status && error.status >= 400 ? error.status : 502).json({
-      installed: false,
-      model,
-      error: error.name === 'AbortError' ? 'Model download timed out' : error.message,
-    });
-  }
-});
-
-async function deleteModel(model, res) {
-  if (!validateModel(model, res)) return;
-
-  try {
-    await ollama('/api/delete', {
-      method: 'DELETE',
-      body: JSON.stringify({ model }),
-      timeout: 30_000,
-    });
-    return res.json({ deleted: true, model });
-  } catch (error) {
-    return res.status(error.status && error.status >= 400 ? error.status : 502).json({
-      deleted: false,
-      model,
-      error: error.message,
-    });
-  }
+  return router;
 }
 
-// Body-based deletion supports model names containing '/'.
-router.delete('/models', async (req, res) => deleteModel(readModel(req.body?.model), res));
-
-// Keep the simple path form for backwards compatibility with model names that contain no '/'.
-router.delete('/models/:model', async (req, res) => deleteModel(readModel(req.params.model), res));
-
-module.exports = router;
+module.exports = createSnckAdminRouter;
