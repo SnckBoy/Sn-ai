@@ -37,6 +37,18 @@ async function ollama(path, options = {}) {
   }
 }
 
+function readModel(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function validateModel(model, res) {
+  if (!MODEL_PATTERN.test(model) || model.includes('..')) {
+    res.status(400).json({ error: 'Invalid model name' });
+    return false;
+  }
+  return true;
+}
+
 router.use(requireJwtAuth, requireAdminAccess);
 
 router.get('/health', async (_req, res) => {
@@ -58,32 +70,27 @@ router.get('/models', async (_req, res) => {
 });
 
 router.post('/models/pull', async (req, res) => {
-  const model = typeof req.body?.model === 'string' ? req.body.model.trim() : '';
-  if (!MODEL_PATTERN.test(model) || model.includes('..')) {
-    return res.status(400).json({ error: 'Invalid model name' });
-  }
+  const model = readModel(req.body?.model);
+  if (!validateModel(model, res)) return;
 
   try {
     const data = await ollama('/api/pull', {
       method: 'POST',
       body: JSON.stringify({ model, stream: false }),
-      timeout: 30 * 60 * 1000,
+      timeout: 60 * 60 * 1000,
     });
     return res.json({ installed: true, model, status: data.status || 'success' });
   } catch (error) {
     return res.status(error.status && error.status >= 400 ? error.status : 502).json({
       installed: false,
       model,
-      error: error.message,
+      error: error.name === 'AbortError' ? 'Model download timed out' : error.message,
     });
   }
 });
 
-router.delete('/models/:model', async (req, res) => {
-  const model = typeof req.params.model === 'string' ? req.params.model : '';
-  if (!MODEL_PATTERN.test(model) || model.includes('..')) {
-    return res.status(400).json({ error: 'Invalid model name' });
-  }
+async function deleteModel(model, res) {
+  if (!validateModel(model, res)) return;
 
   try {
     await ollama('/api/delete', {
@@ -99,6 +106,12 @@ router.delete('/models/:model', async (req, res) => {
       error: error.message,
     });
   }
-});
+}
+
+// Body-based deletion supports model names containing '/'.
+router.delete('/models', async (req, res) => deleteModel(readModel(req.body?.model), res));
+
+// Keep the simple path form for backwards compatibility with model names that contain no '/'.
+router.delete('/models/:model', async (req, res) => deleteModel(readModel(req.params.model), res));
 
 module.exports = router;
