@@ -3,6 +3,11 @@ cache: true
 
 # Snck — AI Platform
 # User-configurable OpenAI-compatible inference plus a private local model service.
+interface:
+  remoteAgents:
+    use: true
+    create: true
+
 endpoints:
   custom:
     - name: "Snck Custom API"
