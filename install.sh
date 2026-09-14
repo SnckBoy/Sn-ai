@@ -56,7 +56,7 @@ clone_or_update(){
   if [[ -d "${APP_DIR}/.git" ]]; then
     log "Updating existing Snck installation..."
     git -C "$APP_DIR" fetch --depth=1 origin "$BRANCH"
-    git -C "$APP_DIR" checkout -q "$BRANCH"
+    git -C "$APP_DIR" checkout -q -B "$BRANCH" "origin/$BRANCH"
     git -C "$APP_DIR" reset --hard -q "origin/$BRANCH"
   elif [[ -e "$APP_DIR" ]]; then
     fail "$APP_DIR exists but is not a Git repository. Move or remove it, then retry."
@@ -180,6 +180,7 @@ uninstall_snck(){
 update_snck(){
   require_root
   check_ubuntu
+  install_prereqs
   install_docker
 
   if [[ ! -d "${APP_DIR}/.git" ]]; then
