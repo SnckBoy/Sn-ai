@@ -36,7 +36,7 @@ The existing authenticated OpenAI-compatible API is available at:
 Example:
 
 ```bash
-curl https://YOUR_SNCK_HOST/api/agents/v1/models \
+curl https://YOUR-SNCK-HOST/api/agents/v1/models \
   -H "Authorization: Bearer YOUR_SNCK_API_KEY"
 ```
 
@@ -44,7 +44,7 @@ The API key is never placed in the frontend bundle or repository.
 
 ## Local models
 
-Snck now includes an internal local model service in the Docker deployment. It is not exposed directly on a public host port.
+Snck includes an internal Ollama model service in the Docker deployment. It is not exposed directly on a public host port.
 
 The Snck Local endpoint uses:
 
@@ -58,8 +58,11 @@ Admins can manage local models through authenticated backend routes under the ex
 GET    /api/admin/users/snck/health
 GET    /api/admin/users/snck/models
 POST   /api/admin/users/snck/models/pull
+DELETE /api/admin/users/snck/models
 DELETE /api/admin/users/snck/models/:model
 ```
+
+For `DELETE /api/admin/users/snck/models`, send `{ "model": "model-name" }` as JSON. The body form supports model names containing `/`; the path form remains available for simple model names.
 
 Model names are validated and the integration communicates with the local model service over HTTP. It does not expose a generic shell-command endpoint.
 
