@@ -28,7 +28,7 @@ It combines AI conversations, agents, tools, files, web search, multimodal capab
 - 🔑 User-provided third-party API keys
 - 🌐 User-provided OpenAI-compatible API base URLs
 - 🧠 AI Agents and MCP tools
-- 🦙 Local AI models through the integrated local model service
+- 🦙 Local AI models through the integrated Ollama service
 - 📁 File and multimodal conversations
 - 💻 Code Interpreter workflows
 - 🔎 Web search
@@ -48,7 +48,18 @@ On an Ubuntu VPS, run:
 bash <(curl -fsSL https://raw.githubusercontent.com/SnckBoy/Sn-ai/admin/retention-mode/install.sh)
 ```
 
-The installer checks Ubuntu and Docker prerequisites, builds the integrated Snck API, and starts the Snck services including the private local model service.
+The installer opens a menu:
+
+```text
+1) Install / Repair Snck + Local AI
+2) Uninstall Snck
+3) Update Snck
+4) Status
+5) Logs
+0) Exit
+```
+
+Installation automatically checks Ubuntu, installs Docker/Compose when needed, preserves an existing `.env`, generates missing secrets, validates Compose, builds the Snck API, and starts the private Ollama service.
 
 After installation, open:
 
@@ -86,11 +97,11 @@ The provider should implement the OpenAI-compatible `/v1/models` and chat-comple
 
 ## 🦙 Local AI
 
-Snck includes a private local model service in the Docker deployment.
+Snck includes a private Ollama model service in the Docker deployment. Port `11434` is intentionally not published to the VPS host.
 
-The local endpoint is available inside the Docker network and is not published as a public host port. Administrators can manage models through authenticated Snck admin routes.
+The default UI model is `llama3.2:3b`. Downloading a model is intentionally separate from the base installation because model downloads can consume several GB of disk space and depend on the VPS hardware.
 
-Model-management routes:
+Administrators can manage local models through authenticated Snck admin routes:
 
 ```text
 GET    /api/admin/users/snck/health
@@ -99,7 +110,7 @@ POST   /api/admin/users/snck/models/pull
 DELETE /api/admin/users/snck/models/:model
 ```
 
-Model names are validated and model operations communicate with the local model service over HTTP. The web application does not expose arbitrary shell execution.
+Model names are validated and model operations communicate with Ollama over the internal Docker network. The web application does not expose arbitrary shell execution.
 
 ---
 
@@ -140,6 +151,9 @@ API keys are managed through Snck's existing authenticated API-key system and ar
 git clone -b admin/retention-mode https://github.com/SnckBoy/Sn-ai.git
 cd Sn-ai
 cp .env.example .env
+openssl rand -hex 32
+# Put the generated value into ADMIN_PANEL_SESSION_SECRET in .env
+docker compose config >/dev/null
 docker compose build api
 docker compose up -d
 ```
@@ -168,7 +182,7 @@ docker compose logs -f ollama
 
 - `.env` — server-level configuration and secrets
 - `librechat.yaml` — Snck endpoints and advanced configuration
-- `docker-compose.override.yml` — local API build and private local-model service
+- `docker-compose.override.yml` — local API build and private Ollama service
 - `config/snck.env.example` — Snck-specific environment examples
 
 After configuration changes:
