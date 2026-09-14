@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Sn-ai — one-command LibreChat installer for Ubuntu VPS
+# Snck — one-command AI Platform installer for Ubuntu VPS
 # Usage:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/SnckBoy/Sn-ai/admin/retention-mode/install.sh)
 
@@ -10,7 +10,7 @@ BRANCH="admin/retention-mode"
 APP_DIR="/opt/sn-ai"
 PORT="3080"
 
-log()  { printf '\033[1;36m[Sn-ai]\033[0m %s\n' "$*"; }
+log()  { printf '\033[1;36m[Snck]\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m[ OK ]\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m[FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
 
@@ -27,7 +27,7 @@ fi
 
 log "Updating Ubuntu packages..."
 apt-get update -y
-apt-get install -y ca-certificates curl git
+apt-get install -y ca-certificates curl git openssl
 
 if ! command -v docker >/dev/null 2>&1; then
   log "Installing Docker Engine and Docker Compose plugin..."
@@ -44,11 +44,10 @@ else
 fi
 
 systemctl enable --now docker
-command -v docker >/dev/null 2>&1 || fail "Docker installation failed."
 docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin is missing."
 
 if [[ -d "${APP_DIR}/.git" ]]; then
-  log "Existing Sn-ai installation found; updating it..."
+  log "Existing Snck installation found; updating it..."
   git -C "$APP_DIR" fetch --depth=1 origin "$BRANCH"
   git -C "$APP_DIR" checkout -q "$BRANCH"
   git -C "$APP_DIR" reset --hard -q "origin/$BRANCH"
@@ -56,7 +55,7 @@ else
   if [[ -e "$APP_DIR" ]]; then
     fail "$APP_DIR exists but is not a Git repository. Move/remove it and run the installer again."
   fi
-  log "Cloning Sn-ai / LibreChat..."
+  log "Cloning Snck..."
   git clone --depth=1 --branch "$BRANCH" "$REPO" "$APP_DIR"
 fi
 
@@ -70,25 +69,20 @@ else
   log ".env already exists; keeping your existing configuration."
 fi
 
-# Generate a strong JWT secret when the template still contains its placeholder.
 if grep -qE '^JWT_SECRET=replace_me' .env 2>/dev/null; then
-  JWT_SECRET="$(openssl rand -hex 32 2>/dev/null || true)"
-  if [[ -n "$JWT_SECRET" ]]; then
-    sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$JWT_SECRET/" .env
-  fi
+  JWT_SECRET="$(openssl rand -hex 32)"
+  sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$JWT_SECRET/" .env
 fi
 
-# Generate a strong session secret when the template still contains its placeholder.
 if grep -qE '^SESSION_SECRET=replace_me' .env 2>/dev/null; then
-  SESSION_SECRET="$(openssl rand -hex 32 2>/dev/null || true)"
-  if [[ -n "$SESSION_SECRET" ]]; then
-    sed -i "s/^SESSION_SECRET=.*/SESSION_SECRET=$SESSION_SECRET/" .env
-  fi
+  SESSION_SECRET="$(openssl rand -hex 32)"
+  sed -i "s/^SESSION_SECRET=.*/SESSION_SECRET=$SESSION_SECRET/" .env
 fi
 
-log "Starting LibreChat containers..."
-docker compose pull
-# Compose's default configuration is the supported LibreChat deployment path.
+log "Building the Snck API with the integrated features..."
+docker compose build api
+
+log "Starting Snck and local model services..."
 docker compose up -d
 
 docker compose ps
@@ -97,18 +91,19 @@ SERVER_IP="$(hostname -I | awk '{print $1}')"
 
 echo
 echo "============================================================"
-echo "  Sn-ai / LibreChat installation complete"
+echo "  Snck — AI Platform installation complete"
 echo "============================================================"
-echo "  URL:      http://${SERVER_IP}:${PORT}"
+echo "  URL:       http://${SERVER_IP}:${PORT}"
 echo "  Directory: ${APP_DIR}"
 echo
-echo "  First account: the first account registered in a"
-echo "  single-tenant deployment becomes the admin account."
+echo "  Local AI:  Snck Local (Ollama)"
+echo "  Custom:    Snck Custom API (user-provided key + base URL)"
 echo
 echo "  Useful commands:"
 echo "    cd ${APP_DIR}"
 echo "    docker compose ps"
 echo "    docker compose logs -f api"
+echo "    docker compose logs -f ollama"
 echo "    docker compose restart"
 echo "    docker compose down"
 echo "============================================================"
