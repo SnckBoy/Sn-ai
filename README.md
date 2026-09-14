@@ -93,10 +93,10 @@ The local endpoint is available inside the Docker network and is not published a
 Model-management routes:
 
 ```text
-GET    /api/admin/snck/health
-GET    /api/admin/snck/models
-POST   /api/admin/snck/models/pull
-DELETE /api/admin/snck/models/:model
+GET    /api/admin/users/snck/health
+GET    /api/admin/users/snck/models
+POST   /api/admin/users/snck/models/pull
+DELETE /api/admin/users/snck/models/:model
 ```
 
 Model names are validated and model operations communicate with the local model service over HTTP. The web application does not expose arbitrary shell execution.
@@ -186,17 +186,16 @@ docker compose up -d
 
 ```text
 Sn-ai/
-├── client/                     # Existing web client
-├── api/                        # Existing backend/API
+├── client/                         # Existing web client
+├── api/                            # Existing backend/API
 ├── api/server/routes/admin/snck.js # Admin local-model controls
-├── api/server/routes/snckApi.js     # Snck inference API module
-├── packages/                   # Existing shared packages
-├── config/                     # Configuration examples
-├── librechat.yaml              # Snck endpoint configuration
-├── docker-compose.yml          # Existing Docker deployment
-├── docker-compose.override.yml # Snck integration layer
-├── install.sh                  # Ubuntu VPS installer
-└── README.md                   # Snck documentation
+├── packages/                       # Existing shared packages
+├── config/                         # Configuration examples
+├── librechat.yaml                  # Snck endpoint configuration
+├── docker-compose.yml              # Existing Docker deployment
+├── docker-compose.override.yml     # Snck integration layer
+├── install.sh                      # Ubuntu VPS installer
+└── README.md                       # Snck documentation
 ```
 
 ---
