@@ -10,6 +10,7 @@ BRANCH="admin/retention-mode"
 APP_DIR="/opt/sn-ai"
 COMPOSE_PROJECT="sn-ai"
 PORT="3080"
+MIN_FREE_MB="6144"
 
 log(){ printf '\033[1;36m[Snck]\033[0m %s\n' "$*"; }
 ok(){ printf '\033[1;32m[ OK ]\033[0m %s\n' "$*"; }
@@ -22,6 +23,17 @@ check_ubuntu(){
   [[ -r /etc/os-release ]] || fail "Cannot detect the operating system."
   . /etc/os-release
   [[ "${ID:-}" == "ubuntu" ]] || fail "Snck supports Ubuntu only. Detected: ${PRETTY_NAME:-unknown}"
+}
+
+check_disk_space(){
+  local target="/opt"
+  local free_mb
+  free_mb="$(df -Pm "$target" | awk 'NR==2 {print $4}')"
+  [[ "$free_mb" =~ ^[0-9]+$ ]] || fail "Unable to determine free disk space on ${target}."
+  if (( free_mb < MIN_FREE_MB )); then
+    fail "Not enough free disk space. Snck needs at least ${MIN_FREE_MB} MB free on ${target}; only ${free_mb} MB is available."
+  fi
+  ok "Disk space check passed (${free_mb} MB free)."
 }
 
 install_prereqs(){
@@ -66,6 +78,20 @@ clone_or_update(){
   fi
 }
 
+set_env_if_blank(){
+  local key="$1"
+  local value="$2"
+  local current=""
+  current="$(grep -E "^${key}=" .env | tail -1 | cut -d= -f2- || true)"
+  if [[ -z "$current" || "$current" == "replace_me" ]]; then
+    if grep -qE "^${key}=" .env; then
+      sed -i "s#^${key}=.*#${key}=${value}#" .env
+    else
+      printf '%s=%s\n' "$key" "$value" >> .env
+    fi
+  fi
+}
+
 prepare_env(){
   cd "$APP_DIR"
   [[ -f .env.example ]] || fail ".env.example is missing from the Snck repository."
@@ -79,25 +105,24 @@ prepare_env(){
     log "Keeping existing .env configuration."
   fi
 
-  if grep -qE '^JWT_SECRET=replace_me$' .env 2>/dev/null; then
-    sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env
-  fi
-  if grep -qE '^SESSION_SECRET=replace_me$' .env 2>/dev/null; then
-    sed -i "s/^SESSION_SECRET=.*/SESSION_SECRET=$(openssl rand -hex 32)/" .env
-  fi
+  # Fixed application port for the Snck installer.
+  set_env_if_blank PORT "$PORT"
+  set_env_if_blank UID "1000"
+  set_env_if_blank GID "1000"
 
-  # The bundled admin panel requires a session secret. Generate one when the
-  # template is empty, but never overwrite an existing user-provided value.
-  if grep -qE '^ADMIN_PANEL_SESSION_SECRET=$' .env 2>/dev/null; then
-    sed -i "s/^ADMIN_PANEL_SESSION_SECRET=.*/ADMIN_PANEL_SESSION_SECRET=$(openssl rand -hex 32)/" .env
-  fi
+  # Permanent cryptographic credentials for production-safe restarts.
+  set_env_if_blank CREDS_KEY "$(openssl rand -hex 32)"
+  set_env_if_blank CREDS_IV "$(openssl rand -hex 16)"
+  set_env_if_blank JWT_SECRET "$(openssl rand -hex 32)"
+  set_env_if_blank JWT_REFRESH_SECRET "$(openssl rand -hex 32)"
+  set_env_if_blank SESSION_SECRET "$(openssl rand -hex 32)"
+  set_env_if_blank ADMIN_PANEL_SESSION_SECRET "$(openssl rand -hex 32)"
+  set_env_if_blank MEILI_MASTER_KEY "$(openssl rand -hex 32)"
 
   # Keep the local Ollama service address explicit for both the API and admin routes.
-  if grep -qE '^OLLAMA_BASE_URL=' .env 2>/dev/null; then
-    sed -i 's#^OLLAMA_BASE_URL=.*#OLLAMA_BASE_URL=http://ollama:11434#' .env
-  else
-    printf '\nOLLAMA_BASE_URL=http://ollama:11434\n' >> .env
-  fi
+  set_env_if_blank OLLAMA_BASE_URL "http://ollama:11434"
+
+  chmod 600 .env
 }
 
 validate_compose(){
@@ -110,39 +135,43 @@ validate_compose(){
 start_snck(){
   cd "$APP_DIR"
   validate_compose
+  check_disk_space
 
   log "Building the Snck API with the integrated features..."
-  docker compose -p "$COMPOSE_PROJECT" build api
+  # Use the normal BuildKit cache. A forced --no-cache rebuild can require
+  # several GB of temporary storage and caused the previous installation to
+  # fail with ENOSPC.
+  if ! docker compose -p "$COMPOSE_PROJECT" build api; then
+    warn "Docker build failed. Current storage usage:"
+    df -h /opt || true
+    docker system df || true
+    fail "Snck API image build failed. No containers were claimed as healthy."
+  fi
 
   log "Starting Snck and local Ollama services..."
   docker compose -p "$COMPOSE_PROJECT" up -d --remove-orphans
 
-  log "Waiting for the API container..."
-  for _ in {1..30}; do
+  log "Waiting for the API container to become stable..."
+  for _ in {1..45}; do
     if docker compose -p "$COMPOSE_PROJECT" ps --status running --services | grep -qx 'api'; then
-      break
+      if curl -fsS --max-time 3 "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
+        ok "Snck web service is responding on port ${PORT}."
+        docker compose -p "$COMPOSE_PROJECT" ps
+        return
+      fi
     fi
     sleep 2
   done
 
-  docker compose -p "$COMPOSE_PROJECT" ps
-
-  if ! docker compose -p "$COMPOSE_PROJECT" ps --status running --services | grep -qx 'api'; then
-    docker compose -p "$COMPOSE_PROJECT" logs --tail=120 api >&2 || true
-    fail "Snck API did not stay running."
-  fi
-
-  if curl -fsS --max-time 10 "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
-    ok "Snck web service is responding on port ${PORT}."
-  else
-    warn "Containers are running, but the HTTP health check is not ready yet."
-    warn "Run: cd ${APP_DIR} && docker compose -p ${COMPOSE_PROJECT} logs --tail=100 api"
-  fi
+  docker compose -p "$COMPOSE_PROJECT" ps || true
+  docker compose -p "$COMPOSE_PROJECT" logs --tail=160 api >&2 || true
+  fail "Snck API did not become healthy on port ${PORT}."
 }
 
 install_snck(){
   require_root
   check_ubuntu
+  check_disk_space
   install_prereqs
   install_docker
   clone_or_update
@@ -171,15 +200,19 @@ uninstall_snck(){
     docker compose -p "$COMPOSE_PROJECT" down --remove-orphans
   fi
 
+  # Remove only the Snck-built image. Do not remove volumes, databases,
+  # Ollama models, or Docker installation data owned by other workloads.
+  docker image rm -f snck-ai:local >/dev/null 2>&1 || true
   rm -rf "$APP_DIR"
-  ok "Snck application files and containers removed."
+  ok "Snck application files, containers, and local Snck image removed."
   echo "Docker itself was left installed for other VPS workloads."
-  echo "The named Ollama volume is preserved; remove it manually if you also want to delete downloaded models."
+  echo "The named Ollama volume is preserved; downloaded models are not deleted."
 }
 
 update_snck(){
   require_root
   check_ubuntu
+  check_disk_space
   install_prereqs
   install_docker
 
