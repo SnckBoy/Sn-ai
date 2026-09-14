@@ -25,6 +25,8 @@ It brings AI conversations, agents, tools, files, web search, multimodal capabil
 ### 🚀 Highlights
 
 - 🤖 Multi-provider AI chat
+- 🔑 **User-provided third-party API keys**
+- 🌐 **User-provided OpenAI-compatible API base URLs**
 - 🧠 AI Agents and MCP tools
 - 📁 File and multimodal conversations
 - 💻 Code Interpreter workflows
@@ -45,7 +47,7 @@ On an Ubuntu VPS, run:
 bash <(curl -fsSL https://raw.githubusercontent.com/SnckBoy/Sn-ai/admin/retention-mode/install.sh)
 ```
 
-The installer handles the basic Docker deployment automatically and starts the Snck AI / LibreChat services.
+The installer handles the basic Docker deployment automatically and starts the Snck AI services.
 
 After installation, open:
 
@@ -54,6 +56,42 @@ http://YOUR-VPS-IP:3080
 ```
 
 > 💡 For production, use a domain with HTTPS and a reverse proxy instead of exposing port `3080` directly.
+
+---
+
+## 🔑 Connect a Third-Party AI API
+
+Snck AI now includes a **Custom API** endpoint that lets each user connect their own compatible inference provider from the LibreChat UI.
+
+The custom endpoint supports:
+
+- Your own API key
+- Your own API base URL
+- OpenAI-compatible gateways
+- Automatic model discovery when the provider exposes `/v1/models`
+- Per-user credentials without putting the key in this GitHub repository
+
+### Example
+
+Use an OpenAI-compatible provider with a base URL such as:
+
+```text
+https://example-provider.com/v1
+```
+
+Then in Snck AI:
+
+1. Select **Snck AI • Custom API**.
+2. Enter your provider's **API key** when prompted.
+3. Enter the provider's **API base URL** if prompted.
+4. Choose one of the models returned by the provider.
+5. Start chatting.
+
+> The provider must expose an API compatible with the OpenAI chat-completions interface. Providers using a completely different API format need a dedicated endpoint configuration.
+
+### 🔒 Security
+
+Snck AI uses LibreChat's `user_provided` endpoint configuration for this feature. User API keys are not hardcoded into `librechat.yaml` or committed to GitHub.
 
 ---
 
@@ -84,7 +122,16 @@ docker compose logs -f
 
 Snck AI uses the LibreChat environment and configuration files included in this repository.
 
-Before production deployment, configure your AI provider credentials, authentication, database settings and other required environment variables.
+- `.env` — server-level configuration and secrets
+- `librechat.yaml` — custom endpoints and advanced configuration
+- `docker-compose.override.yml` — mounts the custom configuration into the API container
+
+After changing configuration, restart the stack:
+
+```bash
+docker compose down
+docker compose up -d
+```
 
 **Never commit API keys, passwords, tokens or other secrets to GitHub.**
 
@@ -94,14 +141,16 @@ Before production deployment, configure your AI provider credentials, authentica
 
 ```text
 Sn-ai/
-├── client/             # Web client
-├── api/                # Backend/API
-├── packages/           # Shared packages
-├── config/             # Configuration
-├── .env.example        # Environment template
-├── docker-compose.yml  # Docker deployment
-├── install.sh          # Ubuntu VPS installer
-└── README.md           # Snck AI documentation
+├── client/                    # Web client
+├── api/                       # Backend/API
+├── packages/                  # Shared packages
+├── config/                    # Configuration
+├── librechat.yaml             # Snck AI custom API endpoint
+├── docker-compose.yml         # Docker deployment
+├── docker-compose.override.yml # Custom config mount
+├── .env.example               # Environment template
+├── install.sh                 # Ubuntu VPS installer
+└── README.md                  # Snck AI documentation
 ```
 
 ---
