@@ -65,6 +65,10 @@ install_docker(){
 }
 
 clone_or_update(){
+  # The user may have deleted /opt/sn-ai while their shell was still inside it.
+  # Git otherwise fails with: "Unable to read current working directory".
+  cd / || fail "Unable to enter the filesystem root; current working directory may have been removed."
+
   if [[ -d "${APP_DIR}/.git" ]]; then
     log "Updating existing Snck installation..."
     git -C "$APP_DIR" fetch --depth=1 origin "$BRANCH"
@@ -105,12 +109,9 @@ prepare_env(){
     log "Keeping existing .env configuration."
   fi
 
-  # Fixed application port for the Snck installer.
   set_env_if_blank PORT "$PORT"
   set_env_if_blank UID "1000"
   set_env_if_blank GID "1000"
-
-  # Permanent cryptographic credentials for production-safe restarts.
   set_env_if_blank CREDS_KEY "$(openssl rand -hex 32)"
   set_env_if_blank CREDS_IV "$(openssl rand -hex 16)"
   set_env_if_blank JWT_SECRET "$(openssl rand -hex 32)"
@@ -118,8 +119,6 @@ prepare_env(){
   set_env_if_blank SESSION_SECRET "$(openssl rand -hex 32)"
   set_env_if_blank ADMIN_PANEL_SESSION_SECRET "$(openssl rand -hex 32)"
   set_env_if_blank MEILI_MASTER_KEY "$(openssl rand -hex 32)"
-
-  # Keep the local Ollama service address explicit for both the API and admin routes.
   set_env_if_blank OLLAMA_BASE_URL "http://ollama:11434"
 
   chmod 600 .env
@@ -138,9 +137,6 @@ start_snck(){
   check_disk_space
 
   log "Building the Snck API with the integrated features..."
-  # Use the normal BuildKit cache. A forced --no-cache rebuild can require
-  # several GB of temporary storage and caused the previous installation to
-  # fail with ENOSPC.
   if ! docker compose -p "$COMPOSE_PROJECT" build api; then
     warn "Docker build failed. Current storage usage:"
     df -h /opt || true
@@ -171,6 +167,8 @@ start_snck(){
 install_snck(){
   require_root
   check_ubuntu
+  # Always recover to a valid directory before any filesystem operations.
+  cd / || fail "Unable to enter filesystem root."
   check_disk_space
   install_prereqs
   install_docker
@@ -189,6 +187,7 @@ install_snck(){
 
 uninstall_snck(){
   require_root
+  cd / || fail "Unable to enter filesystem root."
   if [[ ! -d "$APP_DIR" ]]; then
     warn "Snck is not installed at ${APP_DIR}."
     return
@@ -200,9 +199,8 @@ uninstall_snck(){
     docker compose -p "$COMPOSE_PROJECT" down --remove-orphans
   fi
 
-  # Remove only the Snck-built image. Do not remove volumes, databases,
-  # Ollama models, or Docker installation data owned by other workloads.
   docker image rm -f snck-ai:local >/dev/null 2>&1 || true
+  cd /
   rm -rf "$APP_DIR"
   ok "Snck application files, containers, and local Snck image removed."
   echo "Docker itself was left installed for other VPS workloads."
@@ -212,6 +210,7 @@ uninstall_snck(){
 update_snck(){
   require_root
   check_ubuntu
+  cd / || fail "Unable to enter filesystem root."
   check_disk_space
   install_prereqs
   install_docker
@@ -230,6 +229,7 @@ update_snck(){
 
 status_snck(){
   require_root
+  cd / || fail "Unable to enter filesystem root."
   if [[ ! -d "$APP_DIR" ]]; then
     echo "Snck is not installed."
     return
@@ -240,6 +240,7 @@ status_snck(){
 
 logs_snck(){
   require_root
+  cd / || fail "Unable to enter filesystem root."
   if [[ ! -d "$APP_DIR" ]]; then
     echo "Snck is not installed."
     return
